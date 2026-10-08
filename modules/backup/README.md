@@ -1,0 +1,73 @@
+# AWS Backup Module
+
+This module creates and manages AWS Backup resources for automated backup and recovery of EC2 instances and other supported AWS resources.
+
+## Features
+
+- Creates an AWS Backup vault with encryption (AWS-managed by default, or customer-managed KMS key)
+- Configurable daily and weekly backup plans with separate schedules and retention policies
+- Automatic resource selection based on tags
+- IAM service role with necessary permissions
+
+## Backup Plans
+
+The module deploys two backup plans:
+
+- **Daily Plan**: Runs every day at midnight UTC, retains backups for 90 days. Target resources with `daily_backups=true` tag.
+- **Weekly Plan**: Runs Saturday at midnight UTC, retains backups for 90 days. Target resources with `weekly_backups=true` tag.
+
+## Usage
+
+Tag resources with `daily_backups=true` and/or `weekly_backups=true`, then reference this module:
+
+```hcl
+module "backup" {
+  source = "git::https://github.com/pbs-common/terraform-aws-shared-deployment.git//modules/backup?ref=main"
+
+  vault_name  = "my-backup-vault"
+  kms_key_arn = aws_kms_key.backup.arn
+
+  daily_schedule      = "cron(0 0 * * ? *)"   # Every day at midnight UTC
+  daily_retention = 90
+
+  weekly_schedule      = "cron(0 0 ? * SAT *)"   # Saturday at midnight UTC
+  weekly_retention = 90
+
+  windows_vss = "enabled"
+
+  tags = {
+    Environment = "prod"
+  }
+}
+```
+
+Resources are selected automatically by checking for `daily_backups=true` (for daily plan) or `weekly_backups=true` (for weekly plan) tags.
+
+**If `windows_vss` is enabled, it will only apple to EC2 instances that have the `ec2 vss agent` installed.**
+
+**In order to backup S3, versioning MUST be enabled on the bucket.**
+
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| vault_name | Name of the backup vault | `string` | N/A | yes |
+| kms_key_arn | ARN of the KMS key for customer-managed encryption (AWS-managed encryption used if null) | `string` | `null` | no |
+| daily_schedule | Backup schedule for daily backups in cron format | `string` | `"cron(0 0 * * ? *)"` | no |
+| daily_retention | Days to retain daily backups | `number` | `90` | no |
+| weekly_schedule | Backup schedule for weekly backups in cron format | `string` | `"cron(0 0 ? * SAT *)"` | no |
+| weekly_retention | Days to retain weekly backups | `number` | `90` | no |
+| tags | Tags to apply to resources | `map(string)` | `{}` | no |
+| windows_vss | Whether windows_vss is enabled for EC2 instance backups | `string 'enabled' or 'disabled'` | `disabled` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| backup_vault_arn | ARN of the backup vault |
+| backup_vault_id | ID of the backup vault |
+| backup_vault_name | Name of the backup vault |
+| daily_plan_id | ID of the daily backup plan |
+| daily_plan_arn | ARN of the daily backup plan |
+| weekly_plan_id | ID of the weekly backup plan |
+| weekly_plan_arn | ARN of the weekly backup plan |
